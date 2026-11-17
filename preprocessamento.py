@@ -9,30 +9,41 @@
 
 # Como temos esses dados ficam mais faceis de trabalhar nas colunas
 
+import pandas as pd
 from pandas import DataFrame
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
-def reducao(dataset: DataFrame, colunas: tuple[str]) -> DataFrame:
-    d = dataset.drop(columns=colunas, axis=1)
+def reducao(dataset: DataFrame, colunas: list[str]) -> DataFrame:
+    d = dataset.drop(colunas, axis=1)
     
     return d
 
-def min_max(dataset: DataFrame, colunas: tuple[str]):
+def min_max(dataset: DataFrame, colunas: list[str], scaler = None):
     df = dataset.copy()
     
-    scaler = MinMaxScaler(feature_range=(0, 1))
+    if scaler == None:
+        scaler = MinMaxScaler(feature_range=(0, 1))
 
     df = dataset.copy()
     df[list(colunas)] = scaler.fit_transform(df[list(colunas)])
 
     return df, scaler
 
-def z_score(dataset: DataFrame, colunas: tuple[str]):
+def z_score(dataset: DataFrame, colunas: list[str], scaler = None):
     df = dataset.copy()
         
-    scaler = MinMaxScaler(feature_range=(0, 1))
+    if scaler == None:
+        scaler = StandardScaler()
 
     df = dataset.copy()
     df[list(colunas)] = scaler.fit_transform(df[list(colunas)])
 
     return df, scaler
+
+def carregar_base(path, return_X_y=False):
+    data = pd.read_csv(path)
+    
+    if return_X_y:
+        data = reducao(data, ['date'])
+        return data.drop(['Occupancy'], axis=1), data['Occupancy']
+    return data
