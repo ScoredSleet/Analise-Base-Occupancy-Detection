@@ -2,7 +2,6 @@ import numpy as np
 
 from sklearn.metrics import confusion_matrix
 from sklearn.base import clone
-from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold
 from sklearn.pipeline import Pipeline
 
 
@@ -78,81 +77,47 @@ def compute_metrics(y_true, y_pred, pos_label: int = 1, ignore_cm = False) -> di
         "tp": int(tp), "tn": int(tn), "fp": int(fp), "fn": int(fn),
     }
 
-def _build_pipeline(modelo, scaler) -> Pipeline:
-    """Cria Pipeline(scaler, modelo). `scaler=None` vira 'passthrough'."""
-    scaler_obj = scaler if scaler is not None else "passthrough"
-    if not isinstance(scaler_obj, str):        # <- evita clone("passthrough")
-        scaler_obj = clone(scaler_obj)
-    return Pipeline([
-        ("scaler", scaler_obj),
-        ("model",  clone(modelo)),
-    ])
 
-def treino_random_search(
+def treino(
     models: dict,
     scalers: dict,
-    param_distributions: dict,
     PATH_treino: str,
-    n_iter: int = 30,
-    scoring: str = "f1",
-    n_folds: int = 5,
     formatar: bool = True,
     verbose: bool = False,
-    random_state: int = 42,
 ) -> tuple[dict, dict]:
-    """RandomizedSearchCV por combinação (modelo, scaler).
+    """
+        Treina cada combinação (modelo, scaler) no datatraining completo.
     """
     X_train, y_train = carregar_base(PATH_treino, return_X_y=True, formatar=formatar)
-
-    sfk = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=random_state)
 
     resultados_treino = {}
     modelos_treinados = {}
 
     for nome_modelo, modelo_base in models.items():
-        dist = param_distributions.get(nome_modelo, {})
-
         for nome_scaler, scaler in scalers.items():
             chave = f"{nome_modelo}_{nome_scaler}"
-            pipe = _build_pipeline(modelo_base, scaler)
 
-            search = RandomizedSearchCV(
-                estimator=pipe,
-                param_distributions=dist,
-                n_iter=n_iter,
-                scoring=scoring,
-                cv=sfk,
-                n_jobs=-1,
-                refit=True,
-                random_state=random_state,
-                verbose=True
-            )
-            search.fit(X_train, y_train)
+            # monta pipeline: scaler (ou passthrough) + modelo
+            scaler_obj = scaler if scaler is not None else "passthrough"
+            if not isinstance(scaler_obj, str):
+                scaler_obj = clone(scaler_obj)
 
-            melhor_pipe = search.best_estimator_
-            modelos_treinados[chave] = {
-                "pipeline":    melhor_pipe,
-                "best_params": search.best_params_,
-                "best_score":  float(search.best_score_),
-            }
+            pipe = Pipeline([
+                ("scaler", scaler_obj),
+                ("model",  clone(modelo_base)),
+            ])
+            pipe.fit(X_train, y_train)
 
-            m = compute_metrics(y_train, melhor_pipe.predict(X_train))
-            m["cv_best_score"] = float(search.best_score_)
+            modelos_treinados[chave] = {"pipeline": pipe}
+
+            m = compute_metrics(y_train, pipe.predict(X_train))
             resultados_treino[chave] = m
 
             if verbose:
-                params_limpos = {
-                    k.replace("model__", "").replace("scaler__", "scaler_"):
-                        (round(v, 5) if isinstance(v, float) else v)
-                    for k, v in search.best_params_.items()
-                }
-                print(f"[RS] {chave:<15} → CV {scoring}={search.best_score_:.4f} | "
-                      f"treino f1={m['f1']:.4f}")
-                print(f"     params: {params_limpos}")
+                print(f"[Treino] {chave:<15} -> "
+                      f"f1={m['f1']:.4f}  acc={m['accuracy']:.4f}")
 
     return resultados_treino, modelos_treinados
-
-
 
 def validacao(
     modelos_treinados: dict,

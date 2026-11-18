@@ -3,9 +3,8 @@ from sklearn.svm import SVC
 from xgboost import XGBClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from scipy.stats import loguniform, randint, uniform
 
-from metricas import treino_random_search, validacao
+from metricas import treino, validacao
 
 import pandas as pd
 import os
@@ -24,32 +23,10 @@ models = {
     "NB": GaussianNB(),
 }
 
-param_distributions = {
-    "KNN": {
-        "model__n_neighbors": randint(3, 50),
-        "model__weights": ["uniform", "distance"],
-        "model__metric": ["euclidean", "manhattan"],
-    },
-    "SVM": {
-        "model__C": loguniform(1e-2, 1e2),
-        "model__gamma": loguniform(1e-4, 1e0),
-        "model__kernel": ["rbf", "linear"],
-    },
-    "XGB": {
-        "model__n_estimators": randint(100, 601), 
-        "model__max_depth": randint(1, 5),
-        "model__learning_rate": loguniform(0.01, 0.3),
-        "model__subsample": uniform(0.7, 0.3),
-    },
-    "NB": {
-        "model__var_smoothing": loguniform(1e-11, 1e-2),
-    },
-}
-
 scalers = {
     "Z-Score": StandardScaler(),
     "Min-Max": MinMaxScaler(),
-    #"None": "passthrough",
+    "None": "passthrough",
 }
 
 
@@ -184,17 +161,12 @@ def processar_resultados(
 
 
 def main():
-    resultados_treino, modelos_treinados = treino_random_search(
+    resultados_treino, modelos_treinados = treino(
         models=models,
         scalers=scalers,
-        param_distributions=param_distributions,
         PATH_treino=PATH_TREINO,
-        n_iter=50,
-        scoring="f1",
-        n_folds=5,
         formatar=True,
         verbose=True,
-        random_state=RANDOM_STATE,
     )
 
     resultados_teste = validacao(
@@ -204,7 +176,7 @@ def main():
         verbose=True,
     )
 
-    processar_resultados(resultados_treino, resultados_teste)
+    df_treino, df_teste, df_combo = processar_resultados(resultados_treino, resultados_teste)
 
 
 if __name__ == "__main__":
