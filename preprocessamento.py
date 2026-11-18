@@ -10,6 +10,8 @@
 # Como temos esses dados ficam mais faceis de trabalhar nas colunas
 
 import pandas as pd
+import numpy as np
+
 from pandas import DataFrame
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
@@ -18,32 +20,40 @@ def reducao(dataset: DataFrame, colunas: list[str]) -> DataFrame:
     
     return d
 
-def min_max(dataset: DataFrame, colunas: list[str], scaler = None):
+def formatar_data(dataset: pd.DataFrame, coluna: str = 'date', drop_original: bool = True) -> pd.DataFrame:
     df = dataset.copy()
     
-    if scaler == None:
-        scaler = MinMaxScaler(feature_range=(0, 1))
+    df[coluna] = pd.to_datetime(df[coluna], format='%Y-%m-%d %H:%M:%S')
+    df = df.sort_values(coluna).reset_index(drop=True)
+    
+    dia_semana = df[coluna].dt.dayofweek
+    df[f'{coluna}_dia_semana_sin'] = np.sin(2 * np.pi * dia_semana / 7.0)
+    df[f'{coluna}_dia_semana_cos'] = np.cos(2 * np.pi * dia_semana / 7.0)
 
-    df = dataset.copy()
-    df[list(colunas)] = scaler.fit_transform(df[list(colunas)])
+    hora = df[coluna].dt.hour
+    df[f'{coluna}_hora_sin'] = np.sin(2 * np.pi * hora / 24.0)
+    df[f'{coluna}_hora_cos'] = np.cos(2 * np.pi * hora / 24.0)
 
-    return df, scaler
-
-def z_score(dataset: DataFrame, colunas: list[str], scaler = None):
-    df = dataset.copy()
+    if drop_original:
+        df = df.drop(columns=[coluna])
         
-    if scaler == None:
-        scaler = StandardScaler()
+    return df
 
-    df = dataset.copy()
-    df[list(colunas)] = scaler.fit_transform(df[list(colunas)])
-
-    return df, scaler
-
-def carregar_base(path, return_X_y=False):
+def carregar_base(path, return_X_y: bool = False, formatar: bool = False):
     data = pd.read_csv(path)
     
-    if return_X_y:
+    data['date'] = pd.to_datetime(data['date'], format='%Y-%m-%d %H:%M:%S')
+    data = data.sort_values('date').reset_index(drop=True)
+    
+    if formatar:
+        data = formatar_data(data, 'date')
+    else:
         data = reducao(data, ['date'])
-        return data.drop(['Occupancy'], axis=1), data['Occupancy']
+        
+    
+    if return_X_y:
+        X = data.drop(columns=['Occupancy'])
+        y = data['Occupancy']
+        return X, y
+        
     return data
