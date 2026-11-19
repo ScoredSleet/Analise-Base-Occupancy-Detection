@@ -26,7 +26,7 @@ def formatar_data(dataset: pd.DataFrame, coluna: str = 'date', drop_original: bo
     df[coluna] = pd.to_datetime(df[coluna], format='%Y-%m-%d %H:%M:%S')
     df = df.sort_values(coluna).reset_index(drop=True)
     
-    df[f'{coluna}_dia_semana'] = np.where(df['data'].dt.weekday >= 5, 1, 0)
+    df[f'{coluna}_dia_semana'] = np.where(df[coluna].dt.weekday >= 5, 1, 0)
 
     hora = df[coluna].dt.hour
     df[f'{coluna}_hora_sin'] = np.sin(2 * np.pi * hora / 24.0)
