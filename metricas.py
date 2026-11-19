@@ -64,7 +64,7 @@ def compute_metrics(y_true, y_pred, pos_label: int = 1, ignore_cm = False) -> di
             "sensitivity": float(sensitivity),
             "specificity": float(specificity),
             "f1":          float(f1),
-            "mh":          float(mh),
+            #"mh":          float(mh),
         }
 
     return {
@@ -73,7 +73,7 @@ def compute_metrics(y_true, y_pred, pos_label: int = 1, ignore_cm = False) -> di
         "sensitivity": float(sensitivity),
         "specificity": float(specificity),
         "f1":          float(f1),
-        "mh":          float(mh),
+        #"mh":          float(mh),
         "tp": int(tp), "tn": int(tn), "fp": int(fp), "fn": int(fn),
     }
 
