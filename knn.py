@@ -1,4 +1,5 @@
 import os
+import sys
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -13,31 +14,27 @@ from sklearn.metrics import (
     ConfusionMatrixDisplay,
 )
 
-# 1. Carrega os 3 conjuntos originais diretamente dos CSVs locais (funciona na raiz do repo ou na pasta pai)
+# 1. Localiza a pasta do repositório para importar preprocessamento.py e ler os CSVs locais
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CSV_DIR = os.path.join(BASE_DIR, "dataset", "occupancy_detection", "dataset_csv")
-if not os.path.isdir(CSV_DIR):
-    CSV_DIR = os.path.join(
-        BASE_DIR, "Analise-Base-Occupancy-Detection", "dataset", "occupancy_detection", "dataset_csv"
-    )
+REPO_DIR = (
+    BASE_DIR
+    if os.path.isdir(os.path.join(BASE_DIR, "dataset"))
+    else os.path.join(BASE_DIR, "Analise-Base-Occupancy-Detection")
+)
+if REPO_DIR not in sys.path:
+    sys.path.insert(0, REPO_DIR)
 
-train_df = pd.read_csv(os.path.join(CSV_DIR, "datatraining.csv"))  # datatraining (8.143 linhas)
-test1_df = pd.read_csv(os.path.join(CSV_DIR, "datatest.csv"))      # datatest1    (2.665 linhas)
-test2_df = pd.read_csv(os.path.join(CSV_DIR, "datatest2.csv"))     # datatest2    (9.752 linhas)
+from preprocessamento import carregar_base
 
-# 3. Seleciona os 5 atributos numéricos (sem 'date') e converte para float / int
-colunas_X = ['Temperature', 'Humidity', 'Light', 'CO2', 'HumidityRatio']
+CSV_DIR = os.path.join(REPO_DIR, "dataset", "occupancy_detection", "dataset_csv")
 
-X_train = train_df[colunas_X].astype(float)
-y_train = train_df['Occupancy'].astype(int)
+# 2. Carrega os 3 conjuntos com o pré-processamento padrão do projeto (formatar=True -> 8 atributos)
+# Atributos: Temperature, Humidity, Light, CO2, HumidityRatio, date_dia_semana, date_hora_sin, date_hora_cos
+X_train, y_train = carregar_base(os.path.join(CSV_DIR, "datatraining.csv"), return_X_y=True, formatar=True)
+X_test1, y_test1 = carregar_base(os.path.join(CSV_DIR, "datatest.csv"), return_X_y=True, formatar=True)
+X_test2, y_test2 = carregar_base(os.path.join(CSV_DIR, "datatest2.csv"), return_X_y=True, formatar=True)
 
-X_test1 = test1_df[colunas_X].astype(float)
-y_test1 = test1_df['Occupancy'].astype(int)
-
-X_test2 = test2_df[colunas_X].astype(float)
-y_test2 = test2_df['Occupancy'].astype(int)
-
-# 4. Padronização Z-score (ajustada APENAS no treino para evitar data leakage)
+# 3. Padronização Z-score (ajustada APENAS no treino para evitar data leakage)
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test1_scaled = scaler.transform(X_test1)
@@ -46,15 +43,16 @@ X_test2_scaled = scaler.transform(X_test2)
 
 def calcular_metricas(y_true, y_pred):
     """Retorna as 5 métricas definidas na seção 3.3 do relatório e a matriz de confusão."""
-    cm = confusion_matrix(y_true, y_pred)
+    cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
     tn, fp, fn, tp = cm.ravel()
-    especificidade = tn / (tn + fp)
+    especificidade = tn / (tn + fp) if (tn + fp) else 0.0
     return {
         'Acurácia': accuracy_score(y_true, y_pred),
-        'Precisão': precision_score(y_true, y_pred),
-        'Sensibilidade': recall_score(y_true, y_pred),
+        'Precisão': precision_score(y_true, y_pred, zero_division=0),
+        'Sensibilidade': recall_score(y_true, y_pred, zero_division=0),
         'Especificidade': especificidade,
-        'F1-score': f1_score(y_true, y_pred),
+        'F1-score': f1_score(y_true, y_pred, zero_division=0),
+        'tn': int(tn), 'fp': int(fp), 'fn': int(fn), 'tp': int(tp),
         'cm': cm,
     }
 
@@ -76,12 +74,58 @@ for metric in metricas_dist:
             'Metrica': metric,
             'k': k,
             'T1_Acc': m1['Acurácia'], 'T1_Prec': m1['Precisão'], 'T1_Sens': m1['Sensibilidade'],
-            'T1_Espec': m1['Especificidade'], 'T1_F1': m1['F1-score'], 'T1_CM': m1['cm'],
+            'T1_Espec': m1['Especificidade'], 'T1_F1': m1['F1-score'],
+            'T1_TN': m1['tn'], 'T1_FP': m1['fp'], 'T1_FN': m1['fn'], 'T1_TP': m1['tp'], 'T1_CM': m1['cm'],
             'T2_Acc': m2['Acurácia'], 'T2_Prec': m2['Precisão'], 'T2_Sens': m2['Sensibilidade'],
-            'T2_Espec': m2['Especificidade'], 'T2_F1': m2['F1-score'], 'T2_CM': m2['cm'],
+            'T2_Espec': m2['Especificidade'], 'T2_F1': m2['F1-score'],
+            'T2_TN': m2['tn'], 'T2_FP': m2['fp'], 'T2_FN': m2['fn'], 'T2_TP': m2['tp'], 'T2_CM': m2['cm'],
         })
 
 res_df = pd.DataFrame(resultados)
+
+# Salva os resultados em CSV na pasta resultados/ (tabela comparativa completa + formato simples_validacao/testes)
+RESULTADOS_DIR = os.path.join(REPO_DIR, "resultados")
+os.makedirs(RESULTADOS_DIR, exist_ok=True)
+res_df.drop(columns=['T1_CM', 'T2_CM']).to_csv(
+    os.path.join(RESULTADOS_DIR, "knn_comparativo_testes.csv"), index=False
+)
+
+# Também gera knn_simples_validacao.csv e knn_simples_testes.csv (mesmo padrão de svm.py e modelo_xgboost.py)
+corte_val = int(len(y_train) * 0.80)
+scaler_val = StandardScaler()
+X_tr_int = scaler_val.fit_transform(X_train.iloc[:corte_val])
+X_val_int = scaler_val.transform(X_train.iloc[corte_val:])
+y_tr_int, y_val_int = y_train.iloc[:corte_val], y_train.iloc[corte_val:]
+
+exp_val = []
+for metric in metricas_dist:
+    for k in valores_k:
+        mv = calcular_metricas(y_val_int, KNeighborsClassifier(n_neighbors=k, metric=metric).fit(X_tr_int, y_tr_int).predict(X_val_int))
+        exp_val.append({
+            'escalonamento': 'Z-Score', 'metric': metric, 'n_neighbors': k,
+            'f1': mv['F1-score'], 'acuracia': mv['Acurácia'], 'precisao': mv['Precisão'],
+            'sensibilidade': mv['Sensibilidade'], 'especificidade': mv['Especificidade'],
+            'tn': mv['tn'], 'fp': mv['fp'], 'fn': mv['fn'], 'tp': mv['tp'],
+        })
+df_val_knn = pd.DataFrame(exp_val).sort_values(['f1', 'sensibilidade'], ascending=[False, False], kind='stable').reset_index(drop=True)
+df_val_knn.to_csv(os.path.join(RESULTADOS_DIR, "knn_simples_validacao.csv"), index=False)
+
+melhor_knn = df_val_knn.iloc[0]
+linha_melhor = res_df[(res_df['Metrica'] == melhor_knn['metric']) & (res_df['k'] == int(melhor_knn['n_neighbors']))].iloc[0]
+pd.DataFrame([
+    {
+        'conjunto': 'datatest.csv', 'f1': linha_melhor['T1_F1'], 'acuracia': linha_melhor['T1_Acc'],
+        'precisao': linha_melhor['T1_Prec'], 'sensibilidade': linha_melhor['T1_Sens'],
+        'especificidade': linha_melhor['T1_Espec'], 'tn': int(linha_melhor['T1_TN']),
+        'fp': int(linha_melhor['T1_FP']), 'fn': int(linha_melhor['T1_FN']), 'tp': int(linha_melhor['T1_TP']),
+    },
+    {
+        'conjunto': 'datatest2.csv', 'f1': linha_melhor['T2_F1'], 'acuracia': linha_melhor['T2_Acc'],
+        'precisao': linha_melhor['T2_Prec'], 'sensibilidade': linha_melhor['T2_Sens'],
+        'especificidade': linha_melhor['T2_Espec'], 'tn': int(linha_melhor['T2_TN']),
+        'fp': int(linha_melhor['T2_FP']), 'fn': int(linha_melhor['T2_FN']), 'tp': int(linha_melhor['T2_TP']),
+    },
+]).to_csv(os.path.join(RESULTADOS_DIR, "knn_simples_testes.csv"), index=False)
 
 print("=== TABELA COMPARATIVA KNN (datatest1) ===")
 print(res_df[['Metrica', 'k', 'T1_Acc', 'T1_Prec', 'T1_Sens', 'T1_Espec', 'T1_F1']].to_string(index=False, float_format='{:.4f}'.format))
@@ -121,6 +165,7 @@ for metric, nome_dist, arquivo_saida in [
     plt.suptitle(f'Desempenho do KNN ({nome_dist}) conforme variação de k', fontsize=13, fontweight='bold')
     plt.tight_layout()
     plt.savefig(arquivo_saida, dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join(RESULTADOS_DIR, arquivo_saida), dpi=300, bbox_inches='tight')
     if metric == 'euclidean':
         plt.savefig('knn_curva_k.png', dpi=300, bbox_inches='tight')
 
@@ -153,6 +198,7 @@ for metric, nome_dist, cmap_cor, arquivo_cm in [
     plt.suptitle(f'Matrizes de Confusão — KNN (Distância {nome_dist})', fontsize=13, fontweight='bold')
     plt.tight_layout()
     plt.savefig(arquivo_cm, dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join(RESULTADOS_DIR, arquivo_cm), dpi=300, bbox_inches='tight')
     if metric == 'euclidean':
         plt.savefig('knn_matrizes_confusao.png', dpi=300, bbox_inches='tight')
 
@@ -199,6 +245,7 @@ fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 0.93), ncol
 plt.suptitle('Comparação das 5 Medidas de Avaliação no KNN', fontsize=13, fontweight='bold', y=0.99)
 plt.tight_layout(rect=[0, 0, 1, 0.87])
 plt.savefig('knn_metricas_comparativo.png', dpi=300, bbox_inches='tight')
+plt.savefig(os.path.join(RESULTADOS_DIR, 'knn_metricas_comparativo.png'), dpi=300, bbox_inches='tight')
 
 print("\nGráficos salvos com sucesso:")
 print("- knn_curva_k_euclidiana.png")
