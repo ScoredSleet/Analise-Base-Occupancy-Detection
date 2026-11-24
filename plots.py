@@ -38,7 +38,7 @@ def _salvar(fig, caminho):
 def plot_curva(
     df, x_col, group_col=None, grupos=None, nomes_grupos=None,
     prefixos=None, titulo="", arquivo=None, xlabel=None,
-    marca_x=None, marca_label=None, y_lim=(0.80, 1.01),
+    marca_x=None, marca_label=None, y_lim=(0.80, 1.01), label_col=None,
 ):
     """Uma figura por grupo (ex.: 'euclidean', 'manhattan'); dentro da figura,
     um subplot por conjunto de teste (T1, T2)."""
@@ -51,9 +51,14 @@ def plot_curva(
     for grupo in grupos:
         sub = (df[df[group_col] == grupo] if group_col else df).sort_values(x_col)
         x_vals = sub[x_col].tolist()
+        x_labels = sub[label_col].tolist() if label_col and label_col in sub.columns else x_vals
         pos_x  = np.arange(len(x_vals))
 
-        fig, axes = plt.subplots(1, len(prefixos), figsize=(6.5 * len(prefixos), 5), sharey=True)
+        largura_sub = max(6.5, len(x_vals) * 0.42)
+        rotacao = 45 if len(x_vals) > 8 else 0
+        alinhamento = "right" if rotacao else "center"
+
+        fig, axes = plt.subplots(1, len(prefixos), figsize=(largura_sub * len(prefixos), 5.2), sharey=True)
         if len(prefixos) == 1:
             axes = [axes]
 
@@ -68,7 +73,7 @@ def plot_curva(
             ax.set_title(f"{titulo} — {nome}", fontsize=12, fontweight="bold")
             ax.set_xlabel(xlabel or x_col)
             ax.set_xticks(pos_x)
-            ax.set_xticklabels(x_vals)
+            ax.set_xticklabels(x_labels, rotation=rotacao, ha=alinhamento, fontsize=9)
             ax.grid(True, linestyle="--", alpha=0.4)
             ax.legend(fontsize=9.5, loc="lower right")
 
@@ -82,7 +87,6 @@ def plot_curva(
 
         _salvar(fig, _resolver_arquivo(arquivo, grupo))
         plt.show()
-
 
 def plot_matrizes_confusao(
     df, configs, cm_col="CM", prefixos=None,
