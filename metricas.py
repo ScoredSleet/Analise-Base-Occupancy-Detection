@@ -1,6 +1,6 @@
 import numpy as np
 
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
 from sklearn.base import clone
 from sklearn.pipeline import Pipeline
 
@@ -15,7 +15,7 @@ Tentarei usar como base para o random search o https://www.datacamp.com/pt/tutor
 '''
 
 
-def compute_metrics(y_true, y_pred, pos_label: int = 1, ignore_cm = False) -> dict[str, Any]:
+def compute_metrics(y_true, y_pred) -> dict[str, Any]:
     """Calcula Accuracy, Precision, Sensitivity, Specificity, F1 e MH.
 
     Todas as métricas derivam da MESMA matriz de confusão, garantindo
@@ -23,58 +23,20 @@ def compute_metrics(y_true, y_pred, pos_label: int = 1, ignore_cm = False) -> di
 
     Parametros:
         y_true, y_pred : array-like
-        pos_label : int
-            Classe considerada "positiva" no contexto do problema
 
     Returns
         Metricas
     """
-    labels = [0, pos_label]
-    cm = confusion_matrix(y_true, y_pred, labels=labels)
-    tn, fp, fn, tp = cm.ravel()
-
-    # Acurácia
-    accuracy = (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) else 0.0
-
-    # Precisão
-    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-
-    # Sensitividade
-    sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-
-    # Especificidade
-    specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
-
-    # F1-Score
-    f1 = (
-        2 * precision * sensitivity / (precision + sensitivity)
-        if (precision + sensitivity) > 0 else 0.0
-    )
-
-    # Média Harmônica
-    mh = (
-        2 * sensitivity * specificity / (sensitivity + specificity)
-        if (sensitivity + specificity) > 0 else 0.0
-    )
+    cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
     
-    if ignore_cm == True:
-        return {
-            "accuracy":    float(accuracy),
-            "precision":   float(precision),
-            "sensitivity": float(sensitivity),
-            "specificity": float(specificity),
-            "f1":          float(f1),
-            #"mh":          float(mh),
-        }
-
+    tn, fp, fn, tp = cm.ravel()
     return {
-        "accuracy":    float(accuracy),
-        "precision":   float(precision),
-        "sensitivity": float(sensitivity),
-        "specificity": float(specificity),
-        "f1":          float(f1),
-        #"mh":          float(mh),
-        "tp": int(tp), "tn": int(tn), "fp": int(fp), "fn": int(fn),
+        "Acc":   accuracy_score(y_true, y_pred),
+        "Prec":  precision_score(y_true, y_pred, zero_division=0),
+        "Sens":  recall_score(y_true, y_pred, zero_division=0),
+        "Espec": tn / (tn + fp) if tn + fp else 0.0,
+        "F1":    f1_score(y_true, y_pred, zero_division=0),
+        "cm":    cm,
     }
 
 
